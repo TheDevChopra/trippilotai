@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plane, Github, Mail } from "lucide-react";
+import { Plane, Globe, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,7 @@ export default function LoginPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Button variant="outline" className="w-full">
-              <Github className="mr-2 h-4 w-4" />
+              <Globe className="mr-2 h-4 w-4" />
               Github
             </Button>
             <Button variant="outline" className="w-full">
