@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { format } from "date-fns";
 import { 
   MapPin, Calendar, Users, Wallet, Home, Compass, 
   Coffee, TreePine, Moon, ShoppingBag, Landmark, Activity,
@@ -13,7 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -24,15 +26,25 @@ const STEPS = [
   { id: "generate", title: "Generate" }
 ];
 
+const CURRENCIES = [
+  { label: "USD ($)", value: "USD" },
+  { label: "INR (₹)", value: "INR" },
+  { label: "EUR (€)", value: "EUR" },
+  { label: "GBP (£)", value: "GBP" },
+  { label: "JPY (¥)", value: "JPY" },
+];
+
 export default function NewTripPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStage, setGenerationStage] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const [dateRange, setDateRange] = useState<Date | undefined>();
 
   const [formData, setFormData] = useState({
     destination: "",
-    dates: "",
     travelers: "2",
     budget: "",
     currency: "USD",
@@ -53,22 +65,55 @@ export default function NewTripPage() {
     }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true);
     setCurrentStep(4);
+    setError(null);
     
-    // Simulate multi-agent workflow
-    const timings = [1500, 3000, 4500, 6000, 7500];
-    
-    timings.forEach((time, index) => {
-      setTimeout(() => {
-        setGenerationStage(index + 1);
-      }, time);
-    });
+    // UI Animation timings
+    const interval = setInterval(() => {
+      setGenerationStage(prev => {
+        if (prev >= 5) {
+          clearInterval(interval);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 1500);
 
-    setTimeout(() => {
-      router.push("/dashboard/trip/1");
-    }, 9000);
+    try {
+      const formattedDate = dateRange ? format(dateRange, "PPP") : "Flexible";
+      
+      const response = await fetch("/api/generate-trip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          dates: formattedDate
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate trip");
+      }
+
+      // Store in localStorage for the Result page
+      localStorage.setItem("generatedTrip", JSON.stringify(data));
+      
+      clearInterval(interval);
+      setGenerationStage(5);
+
+      setTimeout(() => {
+        router.push("/dashboard/trip/generated");
+      }, 1000);
+
+    } catch (err: any) {
+      clearInterval(interval);
+      setError(err.message);
+      setIsGenerating(false);
+    }
   };
 
   const togglePreference = (pref: string) => {
@@ -123,6 +168,11 @@ export default function NewTripPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-1 relative">
+              {error && (
+                <div className="mb-4 p-3 bg-destructive/10 text-destructive text-sm rounded-md border border-destructive/20">
+                  {error}
+                </div>
+              )}
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentStep}
@@ -148,17 +198,9 @@ export default function NewTripPage() {
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Dates</Label>
-                          <div className="relative">
-                            <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                              className="pl-10" 
-                              placeholder="Oct 12 - Oct 20" 
-                              value={formData.dates}
-                              onChange={(e) => setFormData({...formData, dates: e.target.value})}
-                            />
-                          </div>
+                        <div className="space-y-2 relative z-50">
+                          <Label>Start Date</Label>
+                          <DatePicker date={dateRange} setDate={setDateRange} />
                         </div>
                         <div className="space-y-2">
                           <Label>Travelers</Label>
@@ -194,11 +236,12 @@ export default function NewTripPage() {
                             />
                           </div>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative z-50">
                           <Label>Currency</Label>
-                          <Input 
-                            value={formData.currency}
-                            onChange={(e) => setFormData({...formData, currency: e.target.value})}
+                          <Select 
+                            options={CURRENCIES} 
+                            value={formData.currency} 
+                            onChange={(val) => setFormData({...formData, currency: val})} 
                           />
                         </div>
                       </div>
@@ -337,7 +380,7 @@ export default function NewTripPage() {
                 <div>
                   <div className="font-medium text-sm">{agent.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {generationStage > agent.id ? "Complete" : generationStage === agent.id ? agent.desc : "Waiting..."}
+                    {generationStage > agent.id ? "Complete" : generationStage === agent.id ? agent.desc : "Waiting on API..."}
                   </div>
                 </div>
               </motion.div>
